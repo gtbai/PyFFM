@@ -11,7 +11,7 @@ for idx in {1..4}
 do
     worker_name=cp-$idx
     echo "Creating SSH link to $worker_name..."
-    cat ~/.ssh/id_rsa.pub | sudo ssh $worker_name "cat >>  /users/gtbai/.ssh/authorized_keys; exit"
+    cat ~/.ssh/id_rsa.pub | sudo ssh $worker_name "cat >> /users/yc/.ssh/authorized_keys; exit"
 done
 
 # copy node setup scripts to each worker
