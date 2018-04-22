@@ -1,24 +1,20 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import tensorflow as tf
 import random
 import numpy as np
-
-tf.logging.set_verbosity(tf.logging.INFO)
+from datetime import datetime
 
 '''
 configure
 '''
 batch_size = 128
-learning_rate = 4.002
+learning_rate = 0.001
 data_path = './norm_test_data.txt'
 
 # no need to define,will be assigned by prepare_data function
 field_num = 0
 feature_num = 0
 
+tf.logging.set_verbosity(tf.logging.INFO)
 
 def prepare_data(file_path=data_path):
     """
@@ -68,7 +64,7 @@ class FFM:
                                                 initializer=tf.truncated_normal_initializer(stddev=0.01))
             tf.summary.histogram('liner_weight', self.liner_weight)
             self.field_embedding = []
-            for idx in range(0, self.feature_num):
+            for idx in xrange(0, self.feature_num):
                 # a list or tensor which stores each feature's vector to each identity field,
                 # shape = [feature_num * field_num]
 
@@ -80,7 +76,7 @@ class FFM:
         with tf.name_scope('input'):
             self.label = tf.placeholder(tf.float32, shape=(self.batch_size))
             self.feature_value = []
-            for idx in range(0, feature_num):
+            for idx in xrange(0, feature_num):
                 self.feature_value.append(
                     tf.placeholder(tf.float32,
                                    shape=(self.batch_size),
@@ -97,8 +93,8 @@ class FFM:
                 , self.liner_weight))
             # calculate quadratic term
             self.qua_term = tf.get_variable(name='quad_term', shape=[1], dtype=tf.float32)
-            for f1 in range(0, feature_num - 1):
-                for f2 in range(f1 + 1, feature_num):
+            for f1 in xrange(0, feature_num - 1):
+                for f2 in xrange(f1 + 1, feature_num):
                     W1 = tf.nn.embedding_lookup(self.field_embedding[f1], self.feature2field[f2])
                     W2 = tf.nn.embedding_lookup(self.field_embedding[f2], self.feature2field[f1])
                     self.qua_term += W1 * W2 * self.feature_value[f1] * self.feature_value[f2]
@@ -129,7 +125,7 @@ class FFM:
         feed_dict = {}
         feed_dict[self.label] = label
         arr_feature = np.transpose(np.array(feature))
-        for idx in range(0, self.feature_num):
+        for idx in xrange(0, self.feature_num):
             feed_dict[self.feature_value[idx]] = arr_feature[idx]
         _,summary, loss_value = self.sess.run([self.opt,self.merged, self.losses], feed_dict=feed_dict)
         #self.train_writer.add_summary(summary, self.step)
@@ -144,7 +140,7 @@ class FFM:
         """
         feature = []
         label = []
-        for _ in range(0, self.batch_size):
+        for _ in xrange(0, self.batch_size):
             t_feature = [0.0] * feature_num
             sample = self.data_set[random.randint(0, len(self.data_set) - 1)]
             label.append(sample[-1])
@@ -158,10 +154,11 @@ class FFM:
 if __name__ == "__main__":
     data_set, feature_map = prepare_data(file_path=data_path)
     print("feature num {} field num {}".format(feature_num, field_num))
+    tf.logging.info("start building model ({})".format(datetime.now()))
     ffm = FFM(batch_size, learning_rate, data_path, field_num, feature_num, feature_map, data_set)
+    tf.logging.info("model built successfully! ({})".format(datetime.now()))
     feature, label = ffm.get_data()
-    for loop in range(0, 1000):
-        print("Right here")
+    for loop in xrange(0, 1000):
         losses = ffm.step()
-        if (loop % 1):
+        if (loop % 50):
             print("loop:{} losses:{}".format(loop, losses))
