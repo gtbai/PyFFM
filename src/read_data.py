@@ -49,11 +49,16 @@ def normalize_data_file(field_dic,feature_dic,meta_file_name = './test_data.txt'
 if __name__ == "__main__":
     print("get field&&feature id")
     field_set,feature_set = get_field_feature()
+
     field_dic = {}
     for idx,item in enumerate(list(field_set)):
         field_dic[item] = idx
+    print field_dic
+
     feature_dic = {}
     for idx,item in enumerate(list(feature_set)):
         feature_dic[item] = idx
+    print feature_dic
+
     print("get norm dataset")
     normalize_data_file(field_dic,feature_dic)
