@@ -8,6 +8,7 @@ configure
 '''
 batch_size = 128
 learning_rate = 0.001
+embedding_dim = 2
 data_path = './norm_test_data.txt'
 
 # no need to define,will be assigned by prepare_data function
@@ -45,11 +46,12 @@ def prepare_data(file_path=data_path):
 
 
 class FFM:
-    def __init__(self, batch_size, learning_rate,
+    def __init__(self, batch_size, learning_rate, embedding_dim,
                  data_path, field_num,
                  feature_num, feature2field, data_set):
         self.batch_size = batch_size
         self.lr = learning_rate
+        self.embedding_dim = embedding_dim
         self.data_path = data_path
         self.field_num = field_num
         self.feature_num = feature_num
@@ -58,47 +60,42 @@ class FFM:
 
         with tf.name_scope('embedding_matrix'):
             # a tensor of shape [feature_num] to hold each Wi
-            self.liner_weight = tf.get_variable(name='line_weight',
-                                                shape=[feature_num],
+            self.linear_weight = tf.get_variable(name='linear_weight',
+                                                shape=[self.feature_num],
                                                 dtype=tf.float32,
                                                 initializer=tf.truncated_normal_initializer(stddev=0.01))
-            tf.summary.histogram('liner_weight', self.liner_weight)
-            self.field_embedding = []
-            for idx in xrange(0, self.feature_num):
-                # a list or tensor which stores each feature's vector to each identity field,
-                # shape = [feature_num * field_num]
+            tf.summary.histogram('liner_weight', self.linear_weight)
 
-                self.field_embedding.append(tf.get_variable(name='field_embedding{}'.format(idx),
-                                                            shape=[field_num],
-                                                            dtype=tf.float32,
-                                                            initializer=tf.truncated_normal_initializer(stddev=0.01)))
-                tf.summary.histogram('field_vector{}'.format(idx), self.field_embedding[idx])
+            self.quad_weight = tf.get_variable(name='quad_weight',
+                                                shape=[self.feature_num, self.field_num, self.embedding_dim],
+                                                dtype=tf.float32,
+                                                initializer=tf.truncated_normal_initializer(stddev=0.01))
+            tf.summary.histogram('quad_weight', self.quad_weight)
+
         with tf.name_scope('input'):
-            self.label = tf.placeholder(tf.float32, shape=(self.batch_size))
-            self.feature_value = []
-            for idx in xrange(0, feature_num):
-                self.feature_value.append(
-                    tf.placeholder(tf.float32,
-                                   shape=(self.batch_size),
-                                   name='feature_{}'.format(idx)))
+            self.label = tf.placeholder(tf.float32, shape=[self.batch_size])
+            self.feature_value = tf.placeholder(tf.float32, shape=[self.batch_size, self.feature_num])
+            
         with tf.name_scope('network'):
+            # predict = b0 + sum(Vi * feature_i) + sum(Vij * Vji * feature_i * feature_j)
 
             # b0:constant bias
-            # predict = b0 + sum(Vi * feature_i) + sum(Vij * Vji * feature_i * feature_j)
             self.b0 = tf.get_variable(name='bias_0', shape=[1], dtype=tf.float32)
             tf.summary.histogram('b0', self.b0)
-            # calculate liner term
-            self.liner_term = tf.reduce_sum(tf.multiply(tf.transpose(
-                tf.convert_to_tensor(self.feature_value),perm=[1, 0])
-                , self.liner_weight))
+
+            # calculate linear term
+            self.linear_term = tf.reduce_sum(tf.multiply(self.feature_value, self.linear_weight), axis=1)
+
             # calculate quadratic term
-            self.qua_term = tf.get_variable(name='quad_term', shape=[1], dtype=tf.float32)
+            self.quad_term = tf.get_variable(name='quad_term', shape=[self.batch_size], dtype=tf.float32)
             for f1 in xrange(0, feature_num - 1):
                 for f2 in xrange(f1 + 1, feature_num):
-                    W1 = tf.nn.embedding_lookup(self.field_embedding[f1], self.feature2field[f2])
-                    W2 = tf.nn.embedding_lookup(self.field_embedding[f2], self.feature2field[f1])
-                    self.qua_term += W1 * W2 * self.feature_value[f1] * self.feature_value[f2]
-            self.predict = self.b0 + self.liner_term + self.qua_term
+                    W1 = self.quad_weight[f1, self.feature2field[f2]]
+                    W2 = self.quad_weight[f2, self.feature2field[f1]]
+                    tf.assign_add(self.quad_term, tf.scalar_mul(tf.tensordot(W1, W2, 1), tf.multiply(self.feature_value[:, f1], self.feature_value[:, f2])))
+
+
+            self.predict = self.b0 + self.liner_term + self.quad_term
             self.losses = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label, logits=self.predict))
             tf.summary.scalar('losses', self.losses)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, name='Adam')
@@ -122,11 +119,12 @@ class FFM:
         self.loop_step += 1
         feature, label = self.get_data()
         # feed value to placeholder
-        feed_dict = {}
-        feed_dict[self.label] = label
-        arr_feature = np.transpose(np.array(feature))
-        for idx in xrange(0, self.feature_num):
-            feed_dict[self.feature_value[idx]] = arr_feature[idx]
+        feed_dict = {self.label : label,
+                    self.feature_value : feature}
+        # feed_dict[self.label] = label
+        # arr_feature = np.transpose(np.array(feature))
+        # for idx in xrange(0, self.feature_num):
+        #     feed_dict[self.feature_value[idx]] = arr_feature[idx]
         _,summary, loss_value = self.sess.run([self.opt,self.merged, self.losses], feed_dict=feed_dict)
         #self.train_writer.add_summary(summary, self.step)
         self.writer.add_summary(summary, self.loop_step)
@@ -155,8 +153,10 @@ if __name__ == "__main__":
     data_set, feature_map = prepare_data(file_path=data_path)
     print("feature num {} field num {}".format(feature_num, field_num))
     tf.logging.info("start building model ({})".format(datetime.now()))
-    ffm = FFM(batch_size, learning_rate, data_path, field_num, feature_num, feature_map, data_set)
+    ffm = FFM(batch_size, learning_rate, embedding_dim, data_path, field_num, feature_num, feature_map, data_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
+    # feature, label = ffm.get_data()
     for loop in xrange(0, 100000):
         losses = ffm.step()
-        tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
+        if (loop % 10 == 0):
+            tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
