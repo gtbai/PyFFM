@@ -32,7 +32,7 @@ def prepare_data(file_path=data_path):
         for field_feature_pair in field_features:
             feature = int(field_feature_pair.split(':')[1])
             field = int(field_feature_pair.split(':')[0])
-            value = float(field_feature_pair.split(':')[0])
+            value = float(field_feature_pair.split(':')[2])
             if (field + 1 > field_num):
                 field_num = field + 1
             if (feature + 1 > feature_num):
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     ffm = FFM(batch_size, learning_rate, data_path, field_num, feature_num, feature_map, data_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
     feature, label = ffm.get_data()
+    tf.logging.info("get data successfully! ({})".format(datetime.now()))
     for loop in xrange(0, 100000):
         losses = ffm.step()
-        if (loop % 10 == 0):
-            tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
+        tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
