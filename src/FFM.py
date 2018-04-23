@@ -158,7 +158,7 @@ if __name__ == "__main__":
     ffm = FFM(batch_size, learning_rate, data_path, field_num, feature_num, feature_map, data_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
     feature, label = ffm.get_data()
-    for loop in xrange(0, 1000):
+    for loop in xrange(0, 100000):
         losses = ffm.step()
-        if (loop % 50):
-            print("loop:{} losses:{}".format(loop, losses))
+        if (loop % 10 == 0):
+            tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))

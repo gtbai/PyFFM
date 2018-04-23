@@ -1,0 +1,3 @@
+nohup: ignoring input
+INFO:tensorflow:start building model (2018-04-22 22:09:30.812786)
+WARNING:tensorflow:Variable += will be deprecated. Use variable.assign_add if you want assignment to the variable value or 'x = x + y' if you want a new python Tensor object.
