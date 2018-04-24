@@ -1,5 +1,4 @@
 import tensorflow as tf
-import random
 import numpy as np
 from datetime import datetime
 
@@ -136,7 +135,11 @@ class FFM:
         """
         feature = []
         label = []
-        batch_end = min(self.batch_start+self.batch_size, len(self.data_set))
+        batch_end = self.batch_start+self.batch_size
+        if batch_end > len(self.data_set):
+            self.idx_perm = np.random.permutation(self.idx_perm)
+            self.batch_start = 0
+            batch_end = self.batch_start+self.batch_size
         for idx in self.idx_perm[self.batch_start:batch_end]:
             t_feature = [0.0] * feature_num
             sample = self.data_set[idx]
@@ -146,9 +149,6 @@ class FFM:
                 t_feature[int(f.split(':')[0])] = float(f.split(':')[1])
             feature.append(t_feature)
         self.batch_start = batch_end
-        if batch_end == len(self.data_set):
-            self.batch_start = 0
-            self.idx_perm = np.random.permutation(self.idx_perm)
         return feature, label
 
 

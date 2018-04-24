@@ -1,3 +1,4 @@
+#!/bin/zsh
 # copy repo to each worker
 cd ~
 for idx in {1..4}
