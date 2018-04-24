@@ -57,6 +57,9 @@ class FFM:
         self.feature_num = feature_num
         self.feature2field = feature2field
         self.data_set = data_set
+        
+        self.batch_start = 0
+        self.idx_perm = np.random.permutation(len(self.data_set))
 
         with tf.name_scope('embedding_matrix'):
             # a tensor of shape [feature_num] to hold each Wi
@@ -64,7 +67,7 @@ class FFM:
                                                 shape=[self.feature_num],
                                                 dtype=tf.float32,
                                                 initializer=tf.truncated_normal_initializer(stddev=0.01))
-            tf.summary.histogram('liner_weight', self.linear_weight)
+            tf.summary.histogram('linear_weight', self.linear_weight)
 
             self.quad_weight = tf.get_variable(name='quad_weight',
                                                 shape=[self.feature_num, self.field_num, self.embedding_dim],
@@ -95,7 +98,7 @@ class FFM:
                     tf.assign_add(self.quad_term, tf.scalar_mul(tf.tensordot(W1, W2, 1), tf.multiply(self.feature_value[:, f1], self.feature_value[:, f2])))
 
 
-            self.predict = self.b0 + self.liner_term + self.quad_term
+            self.predict = self.b0 + self.linear_term + self.quad_term
             self.losses = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label, logits=self.predict))
             tf.summary.scalar('losses', self.losses)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, name='Adam')
@@ -121,12 +124,7 @@ class FFM:
         # feed value to placeholder
         feed_dict = {self.label : label,
                     self.feature_value : feature}
-        # feed_dict[self.label] = label
-        # arr_feature = np.transpose(np.array(feature))
-        # for idx in xrange(0, self.feature_num):
-        #     feed_dict[self.feature_value[idx]] = arr_feature[idx]
         _,summary, loss_value = self.sess.run([self.opt,self.merged, self.losses], feed_dict=feed_dict)
-        #self.train_writer.add_summary(summary, self.step)
         self.writer.add_summary(summary, self.loop_step)
         return loss_value
 
@@ -138,14 +136,19 @@ class FFM:
         """
         feature = []
         label = []
-        for _ in xrange(0, self.batch_size):
+        batch_end = min(self.batch_start+self.batch_size, len(self.data_set))
+        for idx in self.idx_perm[self.batch_start:batch_end]:
             t_feature = [0.0] * feature_num
-            sample = self.data_set[random.randint(0, len(self.data_set) - 1)]
+            sample = self.data_set[idx]
             label.append(sample[-1])
             sample = sample[:-1]
             for f in sample:
                 t_feature[int(f.split(':')[0])] = float(f.split(':')[1])
             feature.append(t_feature)
+        self.batch_start = batch_end
+        if batch_end == len(self.data_set):
+            self.batch_start = 0
+            self.idx_perm = np.random.permutation(self.idx_perm)
         return feature, label
 
 
@@ -155,7 +158,7 @@ if __name__ == "__main__":
     tf.logging.info("start building model ({})".format(datetime.now()))
     ffm = FFM(batch_size, learning_rate, embedding_dim, data_path, field_num, feature_num, feature_map, data_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
-    # feature, label = ffm.get_data()
+    feature, label = ffm.get_data()
     for loop in xrange(0, 100000):
         losses = ffm.step()
         if (loop % 10 == 0):
