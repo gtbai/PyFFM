@@ -1,3 +1,6 @@
 nohup: ignoring input
-INFO:tensorflow:start building model (2018-04-22 22:09:30.812786)
+INFO:tensorflow:start building model (2018-04-23 00:57:46.534299)
 WARNING:tensorflow:Variable += will be deprecated. Use variable.assign_add if you want assignment to the variable value or 'x = x + y' if you want a new python Tensor object.
+2018-04-23 01:17:23.110876: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX2 FMA
+INFO:tensorflow:model built successfully! (2018-04-23 01:24:43.330742)
+INFO:tensorflow:get data successfully! (2018-04-23 01:24:43.408214)
