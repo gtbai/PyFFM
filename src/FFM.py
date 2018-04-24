@@ -159,4 +159,5 @@ if __name__ == "__main__":
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
     for loop in xrange(0, 100000):
         losses = ffm.step()
-        tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
+        if loop % 50 == 0:
+            tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))

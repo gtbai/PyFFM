@@ -64,7 +64,7 @@ class FFM:
                                                 shape=[self.feature_num],
                                                 dtype=tf.float32,
                                                 initializer=tf.truncated_normal_initializer(stddev=0.01))
-            tf.summary.histogram('liner_weight', self.linear_weight)
+            tf.summary.histogram('linear_weight', self.linear_weight)
 
             self.quad_weight = tf.get_variable(name='quad_weight',
                                                 shape=[self.feature_num, self.field_num, self.embedding_dim],
@@ -95,7 +95,7 @@ class FFM:
                     tf.assign_add(self.quad_term, tf.scalar_mul(tf.tensordot(W1, W2, 1), tf.multiply(self.feature_value[:, f1], self.feature_value[:, f2])))
 
 
-            self.predict = self.b0 + self.liner_term + self.quad_term
+            self.predict = self.b0 + self.linear_term + self.quad_term
             self.losses = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label, logits=self.predict))
             tf.summary.scalar('losses', self.losses)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, name='Adam')
@@ -155,8 +155,7 @@ if __name__ == "__main__":
     tf.logging.info("start building model ({})".format(datetime.now()))
     ffm = FFM(batch_size, learning_rate, embedding_dim, data_path, field_num, feature_num, feature_map, data_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
-    # feature, label = ffm.get_data()
     for loop in xrange(0, 100000):
         losses = ffm.step()
-        if (loop % 10 == 0):
+        if loop % 50 == 0:
             tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))

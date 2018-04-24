@@ -1,0 +1,2 @@
+nohup: ignoring input
+INFO:tensorflow:start building model (2018-04-23 03:38:44.998568)
