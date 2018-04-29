@@ -1,2 +1,3 @@
-src/train_plot/
-src/.FFM.py.swp
+tf_src/train_plot/
+
+*.swp
