@@ -11,7 +11,7 @@ reg = 0.0002
 learning_rate = 0.1
 
 counter = 0
-for line in open('data/criteo.tr.r100.gbdt0.ffm'):
+for line in open('../data/criteo.tr.r100.gbdt0.ffm'):
     label = int(line[0])
     if label == 0:
         label = -1
@@ -44,7 +44,7 @@ X_feature = np.array([x[0] for x in data_set])
 X = np.array([x[1] for x in data_set])
 Y = np.array([x[2] for x in data_set])
 
-N, D = X.shape
+N, D = X.shape  # D should be equal to num_field
 
 for e in range(10):
 
@@ -62,6 +62,9 @@ for e in range(10):
 
         j = X_feature[i]                        # feature
         f = [feature2field[ji] for ji in j]     # field
+        print j, f
+        print np.repeat(j, D), np.tile(f, D)
+        exit()
 
         pair_weight = W[np.repeat(j, D), np.tile(f, D)]
         weight_value = (pair_weight * np.repeat(x, D)[:, None]).reshape(D, D, -1)

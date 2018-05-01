@@ -1,3 +1,5 @@
 tf_src/train_plot/
+data/
+!data/readme.txt
 
 *.swp
