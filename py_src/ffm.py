@@ -62,9 +62,6 @@ for e in range(10):
 
         j = X_feature[i]                        # feature
         f = [feature2field[ji] for ji in j]     # field
-        print j, f
-        print np.repeat(j, D), np.tile(f, D)
-        exit()
 
         pair_weight = W[np.repeat(j, D), np.tile(f, D)]
         weight_value = (pair_weight * np.repeat(x, D)[:, None]).reshape(D, D, -1)

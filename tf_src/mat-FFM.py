@@ -25,6 +25,8 @@ def prepare_data(file_path=train_path):
     global field_num
     global feature_num
 
+    count = 0
+
     feature2field = {}
     X_field, X_feature, X_val, Y = [], [], [], []
 
@@ -48,7 +50,7 @@ def prepare_data(file_path=train_path):
 
         parts = sample.split(' ')
         y = int(parts[0])
-        y = y if y == 1 else -1
+        # y = y if y == 1 else -1
         x_field = []
         x_feature = []
         x_val = []
@@ -71,6 +73,10 @@ def prepare_data(file_path=train_path):
         X_feature.append(x_feature)
         X_val.append(x_val)
         Y.append(y)
+
+        count += 1
+        if count == 10000:
+            break
 
     X_field, X_feature, X_val, Y = np.array(X_field), np.array(X_feature), np.array(X_val), np.array(Y)
     data_set = (X_field, X_feature, X_val, Y)
@@ -109,8 +115,8 @@ class FFM:
         with tf.name_scope('input'):
             # self.label = tf.placeholder(tf.float32, shape=[self.batch_size])
             # self.feature_value = tf.placeholder(tf.float32, shape=[self.batch_size, self.feature_num])
-            self.X_field = tf.placeholder(tf.float32, shape=[self.batch_size, self.field_num])
-            self.X_feature = tf.placeholder(tf.float32, shape=[self.batch_size, self.field_num])
+            self.X_field = tf.placeholder(tf.int32, shape=[self.batch_size, self.field_num])
+            self.X_feature = tf.placeholder(tf.int32, shape=[self.batch_size, self.field_num])
             self.X_val = tf.placeholder(tf.float32, shape=[self.batch_size, self.field_num])
             self.Y = tf.placeholder(tf.float32, shape=[self.batch_size])
             
@@ -133,20 +139,23 @@ class FFM:
             #         tf.assign_add(self.quad_term, tf.scalar_mul(tf.tensordot(W1, W2, 1), tf.multiply(self.feature_value[:, f1], self.feature_value[:, f2])))
             # repeat X_feature for self.field_num times
             feature_repeated = tf.reshape(tf.tile(tf.expand_dims(self.X_feature, -1), [1, 1, self.field_num]), shape=[self.batch_size, self.field_num*self.field_num])
-            field_tiled = tf.tile(self.X_field, [1, self.feature_num])
-            pair_idx = tf.stack([feature_repeated, field_tiled], axis=2)
+            field_tiled = tf.tile(self.X_field, [1, self.field_num])
+            pair_idx = tf.stack([feature_repeated, field_tiled], axis=-1)
             pair_idx_flattened = tf.reshape(pair_idx, [-1, 2])
             pair_weight = tf.reshape(tf.gather_nd(self.quad_weight, pair_idx_flattened), shape=[self.batch_size, self.field_num, self.field_num, self.embedding_dim])
-            X_val_repeated = tf.reshape(tf.tile(tf.expand_dims(self.X_val, -1), [1, 1, self.field_num]), self.batch_size, self.field_num, self.field_num, 1)
+            X_val_repeated = tf.reshape(tf.tile(tf.expand_dims(self.X_val, -1), [1, 1, self.field_num]), shape=[self.batch_size, self.field_num, self.field_num, 1])
             weight_val = tf.multiply(pair_weight, X_val_repeated)
 
-            triu = tf.constant(np.expand_dims(np.stack([np.ones([self.field_num, self.field_num])[np.triu_indices(self.field_num, k=1)] for _ in range(self.batch_size)], axis=0), -1))
+            triu = tf.constant(np.expand_dims(np.stack([np.triu(np.ones((self.field_num, self.field_num)), k=1) for _ in range(self.batch_size)], axis=0), -1), dtype=tf.float32)
 
             weight_val_transped = tf.transpose(weight_val, [0, 2, 1, 3])
+
+            print weight_val.get_shape(), weight_val_transped.get_shape(), triu.get_shape()
+
             self.quad_term = tf.reduce_sum(tf.multiply(tf.multiply(weight_val, triu), tf.multiply(weight_val_transped, triu)), axis=[1, 2, 3])
 
             self.predict = self.b0 + self.linear_term + self.quad_term
-            self.losses = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label, logits=self.predict))
+            self.losses = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.Y, logits=self.predict))
             tf.summary.scalar('losses', self.losses)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, name='Adam')
             self.grad = self.optimizer.compute_gradients(self.losses)
@@ -202,12 +211,12 @@ class FFM:
         # return feature, label
 
         batch_end = self.batch_start + self.batch_size
-        if batch_end > len(self.data_set[0]):
+        if batch_end > len(self.train_set[0]):
             self.idx_perm = np.random.permutation(self.idx_perm)
             self.batch_start = 0
             batch_end = self.batch_start+self.batch_size
         idxs = self.idx_perm[self.batch_start : batch_end]
-        return self.data_set[0][idxs, :], self.data_set[1][idxs, :], self.data_set[2][idxs, :], self.data_set[3][idxs]
+        return self.train_set[0][idxs, :], self.train_set[1][idxs, :], self.train_set[2][idxs, :], self.train_set[3][idxs]
 
 if __name__ == "__main__":
     train_set, feature2field = prepare_data(file_path=train_path)
@@ -217,5 +226,5 @@ if __name__ == "__main__":
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
     for loop in xrange(0, 100000):
         losses = ffm.step()
-        if loop % 50 == 0:
+        if loop % 1 == 0:
             tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
