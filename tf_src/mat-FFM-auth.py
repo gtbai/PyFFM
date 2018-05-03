@@ -13,14 +13,14 @@ configure
 tf.app.flags.DEFINE_integer('embedding_dim', 4, 'embedding dimension (k)')
 tf.app.flags.DEFINE_float('regu_param', 2e-5, 'regularization parameter (lambda)')
 tf.app.flags.DEFINE_float('learning_rate', 0.2, 'learning rate (eta)')
-tf.app.flags.DEFINE_integer('batch_size', 1, 'batch size for mini-batch SGD')
+tf.app.flags.DEFINE_integer('batch_size', 8192, 'batch size for mini-batch SGD')
 
 tf.app.flags.DEFINE_string('train_path', '../data/criteo.tr.r100.gbdt0.ffm', 'file path of training dataset')
 tf.app.flags.DEFINE_string('test_path', '../data/criteo.va.r100.gbdt0.ffm', 'file path of test dataset')
 
 
 tf.app.flags.DEFINE_integer('epoch_num', 30, 'number of training epochs')
-tf.app.flags.DEFINE_integer('output_inverval_steps', 100, 'number of inverval steps to output training loss')
+tf.app.flags.DEFINE_integer('output_inverval_steps', 10, 'number of inverval steps to output training loss')
 
 tf.app.flags.DEFINE_boolean('early_stop', True, 'whether to early stop during training')
 tf.app.flags.DEFINE_float('train_ratio', 0.85, 'ratio of training data in the whole dataset')
@@ -44,7 +44,6 @@ class FFM:
         if FLAGS.early_stop:
             self.field_num = max(self.field_num, valid_set.field_num)
             self.feature_num = max(self.feature_num, valid_set.feature_num)
-        self.saver = tf.train.saver()
 
         print("field num {} feature num {}".format(self.field_num, self.feature_num))
 
@@ -109,6 +108,7 @@ class FFM:
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
             self.train_op = self.optimizer.minimize(self.loss_with_regu, global_step=self.global_step)
 
+        self.saver = tf.train.Saver()
         self.sess = tf.InteractiveSession()
 
         with tf.name_scope('plot'):

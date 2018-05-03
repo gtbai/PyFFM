@@ -1,3 +1,10 @@
+tf_src/ckpt/
+tf_src/output-backup/
+tf_src/output/
+
+tf_src/output-auth-backup/
+tf_src/output-auth/
+
 tf_src/train_plot/
 tf_src/valid_plot/
 tf_src/test_plot/
