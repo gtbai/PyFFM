@@ -1,115 +1,53 @@
 import numpy as np
 
 
-feature2field = {}
-data_set = []
+class FFM:
+    def __init__(self, latent_dim, reg_parm, batch_size, learning_rate, n_iter):
+        self.latent_dim = latent_dim
+        self.reg_parm = reg_parm
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.n_iter = n_iter
 
-num_field = 0       # 39
-num_feature = 0     # 999997
-num_latent_factor = 4
-reg = 0.0002
-learning_rate = 0.1
+    def fit(self, X, y, feature2field: dict):
+        n_fields = max(feature2field.values()) + 1
+        n_features = max(feature2field.keys()) + 1
 
-counter = 0
-for line in open('../data/criteo.tr.r100.gbdt0.ffm'):
-    label = int(line[0])
-    if label == 0:
-        label = -1
-    features = []
-    values = []
+        X_val, X_feat = X  # type: (np.ndarray, np.ndarray)
+        n_samples, _ = X_val.shape
 
-    for pair in line.split()[1:]:
-        field, feature, value = [int(x) for x in pair.split(':')]
+        self.coef_ = np.random.rand(n_features, n_fields, self.latent_dim) / np.sqrt(self.latent_dim)
+        self.g_sum_ = np.ones_like(self.coef_)
 
-        features.append(feature)
-        values.append(value)
+        for iteration_idx in range(self.n_iter):
+            minibatch_indices = np.random.choice(n_samples, self.batch_size, replace=False)
 
-        feature2field[feature] = field
+            self._fit_adagrad((X_val[minibatch_indices], X_feat[minibatch_indices]),
+                              y[minibatch_indices], feature2field)
 
-    data_set.append((features, values, label))
+    def _fit_adagrad(self, X, y, feature2field: dict):
+        X_val, X_feat = X  # type: (np.ndarray, np.ndarray)
+        X_field = np.vectorize(feature2field.__getitem__)(X_feat)
 
-    counter += 1
-    if counter == 10000:
-        break
+        n_samples, n_fields = X_val.shape
 
+        coef_idx = (np.repeat(X_feat, n_fields, axis=-1), np.tile(X_field, n_fields))
+        coef = self.coef_[coef_idx[0], coef_idx[1]]
 
-num_field = max(feature2field.values()) + 1
-num_feature = max(feature2field.keys()) + 1
+        X_val_repeated = np.repeat(X_val, n_fields, axis=-1)[..., None]
+        coef_val = (coef * X_val_repeated).reshape(self.batch_size, n_fields, n_fields, -1)
 
-# np.random.seed(0)
-W = np.random.rand(num_feature, num_field, num_latent_factor) * 0.01
-acc_gradient = np.ones_like(W)
+        triu = np.triu_indices(n_fields, k=1)
+        kernel_ffm = np.sum(coef_val.transpose((0, 2, 1, 3))[:, triu[0], triu[1], :]
+                            * coef_val[:, triu[0], triu[1], :], axis=(1, 2))
 
-X_feature = np.array([x[0] for x in data_set])
-X = np.array([x[1] for x in data_set])
-Y = np.array([x[2] for x in data_set])
+        kappa = - y / (1 + np.exp(y * kernel_ffm))
 
-N, D = X.shape  # D should be equal to num_field
+        coef = coef.reshape(self.batch_size, n_fields, n_fields, -1)
+        gradient = self.reg_parm * coef + kappa.reshape(-1, 1, 1, 1) * coef.transpose((0, 2, 1, 3))
+        gradient = gradient.reshape(self.batch_size, n_fields * n_fields, -1)
 
-for e in range(10):
+        np.add.at(self.g_sum_, coef_idx, gradient ** 2)
+        np.add.at(self.coef_, coef_idx, - self.learning_rate / np.sqrt(self.g_sum_[coef_idx]) * gradient)
 
-    for i in range(N):
-        x = X[i]
-        y = Y[i]
-        # f = X_feature[0]
-        #
-        # kernel_ffm = 0
-        # for j1 in range(D):
-        #     for j2 in range(j1+1, D):
-        #         w_j1f2 = W[f[j1], feature2field[f[j2]]]
-        #         w_j2f1 = W[f[j2], feature2field[f[j1]]]
-        #         kernel_ffm += np.dot(w_j1f2, w_j2f1) * x[j1] * x[j2]
-
-        j = X_feature[i]                        # feature
-        f = [feature2field[ji] for ji in j]     # field
-
-        pair_weight = W[np.repeat(j, D), np.tile(f, D)]
-        weight_value = (pair_weight * np.repeat(x, D)[:, None]).reshape(D, D, -1)
-
-        tri_indices = np.triu_indices(D, k=1)
-        kernel_ffm2 = np.sum(weight_value.transpose((1, 0, 2))[tri_indices] * weight_value[tri_indices])
-
-        kappa = - y / (1 + np.exp(y * kernel_ffm2))
-
-        pair_weight = pair_weight.reshape(D, D, -1)
-        gradient = reg * pair_weight + kappa * pair_weight.transpose((1, 0, 2))
-        gradient = gradient.reshape((D*D, -1))
-        acc_gradient[np.repeat(j, D), np.tile(f, D)] += gradient ** 2
-
-        W[np.repeat(j, D), np.tile(f, D)] -= learning_rate / np.sqrt(acc_gradient[np.repeat(j, D), np.tile(f, D)]) * gradient
-
-    loss = 0
-    for k in range(N):
-        x = X[k]
-        y = Y[k]
-
-        j = X_feature[k]  # feature
-        f = [feature2field[ji] for ji in j]  # field
-
-        pair_weight = W[np.repeat(j, D), np.tile(f, D)]
-        weight_value = (pair_weight * np.repeat(x, D)[:, None]).reshape(D, D, -1)
-
-        tri_indices = np.triu_indices(D, k=1)
-        kernel_ffm2 = np.sum(weight_value.transpose((1, 0, 2))[tri_indices] * weight_value[tri_indices])
-        loss += np.log(1 + np.exp(-y * kernel_ffm2))
-    print(loss / N)
-
-
-# def ffm1():
-#     f = X_feature[0]
-#     kernel_ffm = 0
-#     for j1 in range(D):
-#         for j2 in range(j1 + 1, D):
-#             w_j1f2 = W[f[j1], feature2field[f[j2]]]
-#             w_j2f1 = W[f[j2], feature2field[f[j1]]]
-#             kernel_ffm += np.dot(w_j1f2, w_j2f1) * x[j1] * x[j2]
-#
-#
-# def ffm2():
-#     j = X_feature[0]  # feature
-#     f = [feature2field[ji] for ji in j]  # field
-#
-#     pair_weight = (W[np.repeat(j, D), np.tile(f, D)] * np.repeat(x, D)[:, None]).reshape(D, D, -1)
-#
-#     tri_indices = np.triu_indices(D, k=1)
-#     kernel_ffm2 = np.sum(pair_weight.transpose((1, 0, 2))[tri_indices] * pair_weight[tri_indices])
+    
