@@ -114,22 +114,6 @@ class FFM:
         self.sess.run(tf.global_variables_initializer())
         self.loop_step = 0
 
-
-    def step(self):
-        '''
-        :return: log_loss
-        '''
-        self.loop_step += 1
-        X_field_batch, X_feature_batch, X_val_batch, Y_batch = self.get_data()
-        # feed value to placeholder
-        feed_dict = {self.X_field : X_field_batch,
-                    self.X_feature : X_feature_batch,
-                    self.X_val : X_val_batch,
-                    self.Y : Y_batch}
-        _, summary, loss_value = self.sess.run([self.opt, self.merged, self.losses], feed_dict=feed_dict)
-        self.writer.add_summary(summary, self.loop_step)
-        return loss_value
-
     def train(self):
 
         X_field_valid, X_feature_valid, X_val_valid, Y_valid = self.valid_set.get_all()

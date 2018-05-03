@@ -1,6 +1,9 @@
 tf_src/train_plot/
 tf_src/valid_plot/
 tf_src/test_plot/
+converters/
+utils/
+run.py
 
 data/
 !data/readme.txt
