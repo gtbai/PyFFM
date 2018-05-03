@@ -5,9 +5,9 @@ FLAGS = tf.app.flags.FLAGS
 
 class Dataset(object):
 
-	def __init__(self, data_path):
+	def __init__(self, data_path, start_ratio, end_ratio):
 		super(Dataset, self).__init__()
-		self.data_set, self.feature2field, self.field_num, self.feature_num = Dataset.parse_data(data_path)
+		self.data_set, self.feature2field, self.field_num, self.feature_num = Dataset.parse_data(data_path, start_ratio, end_ratio)
 		self.X_field, self.X_feature, self.X_val, self.Y = self.data_set
 		self.batch_size = FLAGS.batch_size
 		self.sample_num = len(self.X_field)
@@ -28,7 +28,7 @@ class Dataset(object):
 		return self.X_field, self.X_feature, self.X_val, self.Y
 
 	@classmethod
-	def parse_data(cls, data_path):
+	def parse_data(cls, data_path, start_ratio, end_ratio):
 		field_num = 0
 		feature_num = 0
 
@@ -37,7 +37,11 @@ class Dataset(object):
 		feature2field = {}
 		X_field, X_feature, X_val, Y = [], [], [], []
 
-		for sample in open(data_path, 'r'):
+		data_file = open(data_path, 'r')
+		samples = data_file.readlines()
+		samples = samples[int(start_ratio*len(samples)) : int(end_ratio*len(samples))]
+
+		for sample in samples:
 
 			parts = sample.split(' ')
 			y = int(parts[0])
@@ -66,9 +70,9 @@ class Dataset(object):
 			X_val.append(x_val)
 			Y.append(y)
 
-			count += 1
-			if count == 1000:
-				break
+			# count += 1
+			# if count == 1000:
+			# 	break
 
 		X_field, X_feature, X_val, Y = np.array(X_field), np.array(X_feature), np.array(X_val), np.array(Y)
 		data_set = (X_field, X_feature, X_val, Y)

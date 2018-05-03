@@ -21,16 +21,26 @@ tf.app.flags.DEFINE_string('test_path', '../data/criteo.va.r100.gbdt0.ffm', 'fil
 tf.app.flags.DEFINE_integer('epoch_num', 30, 'number of training epochs')
 tf.app.flags.DEFINE_integer('output_inverval_steps', 1, 'number of inverval steps to output training loss')
 
+tf.app.flags.DEFINE_boolean('early_stop', True, 'whether to early stop during training')
+tf.app.flags.DEFINE_float('train_ratio', 0.8, 'ratio of training data in the whole dataset')
+
 class FFM:
-    def __init__(self, train_set, test_set):
+    def __init__(self, train_set, valid_set, test_set):
         self.embedding_dim = FLAGS.embedding_dim
         self.regu_param = FLAGS.regu_param
         self.learning_rate = FLAGS.learning_rate
 
         self.train_set = train_set
+        self.valid_set = valid_set
         self.test_set = test_set
+
         self.field_num = max(train_set.field_num, test_set.field_num)
         self.feature_num = max(train_set.feature_num, test_set.feature_num)
+        if FLAGS.early_stop:
+            self.field_num = max(self.field_num, valid_set.field_num)
+            self.feature_num = max(self.feature_num, valid_set.feature_num)
+
+        print("field num {} feature num {}".format(self.field_num, self.feature_num))
 
         with tf.name_scope('embedding_matrix'):
             # a tensor of shape [feature_num] to hold each Wi
@@ -98,6 +108,7 @@ class FFM:
         with tf.name_scope('plot'):
             self.merged = tf.summary.merge_all()
             self.train_writer = tf.summary.FileWriter('./train_plot', self.sess.graph)
+            self.valid_writer = tf.summary.FileWriter('./valid_plot', self.sess.graph)
             self.test_writer = tf.summary.FileWriter('./test_plot', self.sess.graph)
 
         self.sess.run(tf.global_variables_initializer())
@@ -120,13 +131,14 @@ class FFM:
         return loss_value
 
     def train(self):
-        for epoch in range(FLAGS.epoch_num):
+        prev_valid_loss = float('inf')
+        for epoch in range(1, FLAGS.epoch_num+1):
             self.train_set.shuffle_data()
             while True:
                 # train with mini-batch SGD
                 X_field_batch, X_feature_batch, X_val_batch, Y_batch = self.train_set.next_batch()
                 if len(X_field_batch) == 0:  # if no data in this batch, means this epoch is finished
-                    tf.logging.info("Finished epoch {}".format(epoch+1))
+                    tf.logging.info("Finished epoch {}".format(epoch))
                     break
                 feed_dict = {
                     self.X_field : X_field_batch,
@@ -134,10 +146,28 @@ class FFM:
                     self.X_val : X_val_batch,
                     self.Y : Y_batch
                 }
-                _, train_loss, train_summary, global_step = self.sess.run([self.train_op, self.loss, self.merged, self.global_step], feed_dict=feed_dict)
+                _, train_loss_with_regu, train_summary, global_step = self.sess.run([self.train_op, self.loss_with_regu, self.merged, self.global_step], feed_dict=feed_dict)
+
                 self.train_writer.add_summary(train_summary, global_step)
                 if global_step % FLAGS.output_inverval_steps == 0:
-                    tf.logging.info("global step:{} training loss:{} ({})".format(global_step, train_loss, datetime.now()))
+                    tf.logging.info("global step:{} training loss (with regularization):{} ({})".format(global_step, train_loss_with_regu, datetime.now()))
+
+            if FLAGS.early_stop:
+                # evaluate on validation set, determine whether to early stop
+                X_field_valid, X_feature_valid, X_val_valid, Y_valid = self.valid_set.get_all()
+                feed_dict = {
+                    self.X_field : X_field_valid,
+                    self.X_feature : X_feature_valid,
+                    self.X_val : X_val_valid,
+                    self.Y : Y_valid
+                }
+                valid_loss, valid_summary = self.sess.run([self.loss, self.merged], feed_dict = feed_dict)
+                self.valid_writer.add_summary(valid_summary, epoch)
+                tf.logging.info("epoch:{} validation loss:{} ({})".format(epoch, valid_loss, datetime.now()))
+                if valid_loss > prev_valid_loss:
+                    tf.logging.info("validation loss goes up after {} epochs".format(epoch))
+                    exit()
+                prev_valid_loss = valid_loss
 
             # evaluate loss on test set
             X_field_test, X_feature_test, X_val_test, Y_test = self.test_set.get_all()
@@ -153,16 +183,19 @@ class FFM:
 
 
 def main(unused_args):
-    train_set = Dataset(FLAGS.train_path)
-    test_set = Dataset(FLAGS.test_path)
-    print("feature num {} field num {}".format(train_set.feature_num, train_set.field_num))
+
+    train_set, valid_set = None, None
+    if FLAGS.early_stop:
+        train_set = Dataset(FLAGS.train_path, 0.0, FLAGS.train_ratio)
+        valid_set = Dataset(FLAGS.train_path, FLAGS.train_ratio, 1.0)
+    else:
+        train_set = Dataset(FLAGS.train_path, 0.0, 1.0)
+    test_set = Dataset(FLAGS.test_path, 0.0, 1.0)
+
     tf.logging.info("start building model ({})".format(datetime.now()))
-    ffm = FFM(train_set, test_set)
+    ffm = FFM(train_set, valid_set, test_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
-    # for loop in xrange(0, 100000):
-    #     losses = ffm.step()
-    #     if loop % 1 == 0:
-    #         tf.logging.info("loop:{} losses:{} ({})".format(loop, losses, datetime.now()))
+
     ffm.train()
 
 if __name__ == "__main__":
