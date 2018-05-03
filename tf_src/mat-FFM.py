@@ -47,13 +47,17 @@ class FFM:
             self.linear_weight = tf.get_variable(name='linear_weight',
                                                 shape=[self.feature_num],
                                                 dtype=tf.float32,
-                                                initializer=tf.random_uniform_initializer(minval=0, maxval=1/sqrt(self.embedding_dim)))
+                                                # initializer=tf.random_uniform_initializer(minval=0, maxval=1/sqrt(self.embedding_dim))
+                                                initializer=tf.random_uniform_initializer(minval=0, maxval=0.01)
+						)
             tf.summary.histogram('linear_weight', self.linear_weight)
 
             self.quad_weight = tf.get_variable(name='quad_weight',
                                                 shape=[self.feature_num, self.field_num, self.embedding_dim],
                                                 dtype=tf.float32,
-                                                initializer=tf.random_uniform_initializer(minval=0, maxval=1/sqrt(self.embedding_dim)))
+                                                # initializer=tf.random_uniform_initializer(minval=0, maxval=1/sqrt(self.embedding_dim))
+                                                initializer=tf.random_uniform_initializer(minval=0, maxval=0.01)
+						)
             tf.summary.histogram('quad_weight', self.quad_weight)
 
         with tf.name_scope('input'):
@@ -101,7 +105,7 @@ class FFM:
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam')
             # self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.learning_rate, initial_accumulator_value=1)
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
-            self.train_op = self.optimizer.minimize(self.loss_with_regu, global_step=self.global_step)
+            self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
         self.sess = tf.InteractiveSession()
 
