@@ -12,8 +12,8 @@ configure
 '''
 tf.app.flags.DEFINE_integer('embedding_dim', 4, 'embedding dimension (k)')
 tf.app.flags.DEFINE_float('regu_param', 2e-5, 'regularization parameter (lambda)')
-tf.app.flags.DEFINE_float('learning_rate', 0.2, 'learning rate (eta)')
-tf.app.flags.DEFINE_integer('batch_size', 1, 'batch size for mini-batch SGD')
+tf.app.flags.DEFINE_float('learning_rate', 0.001, 'learning rate (eta)')
+tf.app.flags.DEFINE_integer('batch_size', 128, 'batch size for mini-batch SGD')
 
 tf.app.flags.DEFINE_string('train_path', '../data/criteo.tr.r100.gbdt0.ffm', 'file path of training dataset')
 tf.app.flags.DEFINE_string('test_path', '../data/criteo.va.r100.gbdt0.ffm', 'file path of test dataset')
@@ -98,8 +98,8 @@ class FFM:
 
             self.regu = tf.nn.l2_loss(self.linear_weight) + tf.nn.l2_loss(self.quad_weight)
             self.loss_with_regu = self.loss + self.regu_param * self.regu
-            # self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam')
-            self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.learning_rate, initial_accumulator_value=1)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam')
+            # self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.learning_rate, initial_accumulator_value=1)
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
             self.train_op = self.optimizer.minimize(self.loss_with_regu, global_step=self.global_step)
 
@@ -131,7 +131,16 @@ class FFM:
         return loss_value
 
     def train(self):
-        prev_valid_loss = float('inf')
+
+        X_field_valid, X_feature_valid, X_val_valid, Y_valid = self.valid_set.get_all()
+        feed_dict = {
+                    self.X_field : X_field_valid,
+                    self.X_feature : X_feature_valid,
+                    self.X_val : X_val_valid,
+                    self.Y : Y_valid
+                }
+        prev_valid_loss = self.sess.run([self.loss], feed_dict = feed_dict)
+
         for epoch in range(1, FLAGS.epoch_num+1):
             self.train_set.shuffle_data()
             while True:
@@ -146,11 +155,11 @@ class FFM:
                     self.X_val : X_val_batch,
                     self.Y : Y_batch
                 }
-                _, train_loss_with_regu, train_summary, global_step = self.sess.run([self.train_op, self.loss_with_regu, self.merged, self.global_step], feed_dict=feed_dict)
+                _, train_loss, train_summary, global_step = self.sess.run([self.train_op, self.loss, self.merged, self.global_step], feed_dict=feed_dict)
 
                 self.train_writer.add_summary(train_summary, global_step)
                 if global_step % FLAGS.output_inverval_steps == 0:
-                    tf.logging.info("global step:{} training loss (with regularization):{} ({})".format(global_step, train_loss_with_regu, datetime.now()))
+                    tf.logging.info("global step:{} training loss:{} ({})".format(global_step, train_loss, datetime.now()))
 
             if FLAGS.early_stop:
                 # evaluate on validation set, determine whether to early stop
@@ -166,20 +175,20 @@ class FFM:
                 tf.logging.info("epoch:{} validation loss:{} ({})".format(epoch, valid_loss, datetime.now()))
                 if valid_loss > prev_valid_loss:
                     tf.logging.info("validation loss goes up after {} epochs".format(epoch))
-                    exit()
+                    return epoch
                 prev_valid_loss = valid_loss
 
-            # evaluate loss on test set
-            X_field_test, X_feature_test, X_val_test, Y_test = self.test_set.get_all()
-            feed_dict = {
-                self.X_field : X_field_test,
-                self.X_feature : X_feature_test,
-                self.X_val : X_val_test,
-                self.Y : Y_test
-            }
-            test_loss, test_summary = self.sess.run([self.loss, self.merged], feed_dict = feed_dict)
-            self.test_writer.add_summary(test_summary, epoch)
-            tf.logging.info("epoch:{} test loss:{} ({})".format(epoch, test_loss, datetime.now()))
+    def test(self):
+        # evaluate loss on test set
+        X_field_test, X_feature_test, X_val_test, Y_test = self.test_set.get_all()
+        feed_dict = {
+            self.X_field : X_field_test,
+            self.X_feature : X_feature_test,
+            self.X_val : X_val_test,
+            self.Y : Y_test
+        }
+        test_loss, test_summary = self.sess.run([self.loss, self.merged], feed_dict = feed_dict)
+        tf.logging.info("test loss:{} ({})".format(test_loss, datetime.now()))
 
 
 def main(unused_args):
@@ -196,7 +205,13 @@ def main(unused_args):
     ffm = FFM(train_set, valid_set, test_set)
     tf.logging.info("model built successfully! ({})".format(datetime.now()))
 
-    ffm.train()
+    stopping_epoch_num = ffm.train()
+    if FLAGS.early_stop:
+        ffm.train_set = Dataset(FLAGS.train_path, 0.0, 1.0)
+        FLAGS.early_stop = False
+        FLAGS.epoch_num = stopping_epoch_num
+        ffm.train()
+    ffm.test()
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)
