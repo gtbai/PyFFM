@@ -37,17 +37,19 @@ class FFM:
         coef_idx = (np.repeat(X_feat, n_fields, axis=-1), np.tile(X_field, n_fields))
         coef = self.coef_[coef_idx[0], coef_idx[1]]
 
-        X_val_repeated = np.repeat(X_val, n_fields, axis=-1)[..., None]
-        coef_val = (coef * X_val_repeated).reshape(self.batch_size, n_fields, n_fields, -1)
+        X_val_repeated = np.repeat(X_val, n_fields, axis=-1)
+        coef_val = (coef * X_val_repeated[..., None]).reshape(self.batch_size, n_fields, n_fields, -1)
 
         triu = np.triu_indices(n_fields, k=1)
         kernel_ffm = np.sum(coef_val.transpose((0, 2, 1, 3))[:, triu[0], triu[1], :]
                             * coef_val[:, triu[0], triu[1], :], axis=(1, 2))
 
-        kappa = - y / (1 + np.exp(y * kernel_ffm))
+        kappa = (- y / (1 + np.exp(y * kernel_ffm))).reshape(-1, 1, 1, 1)
 
         coef = coef.reshape(self.batch_size, n_fields, n_fields, -1)
-        gradient = self.reg_parm * coef + kappa.reshape(-1, 1, 1, 1) * coef.transpose((0, 2, 1, 3))
+        X_val_repeated = X_val_repeated.reshape(self.batch_size, n_fields, n_fields, 1)
+
+        gradient = self.reg_parm * coef + kappa * coef.transpose((0, 2, 1, 3)) * X_val_repeated * X_val_repeated.transpose((0, 2, 1, 3))
         gradient = gradient.reshape(self.batch_size, n_fields * n_fields, -1)
 
         np.add.at(self.g_sum_, coef_idx, gradient ** 2)
