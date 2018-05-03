@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 from datetime import datetime
-from math import sqrt
 
 from dataset import Dataset
 
@@ -23,6 +22,9 @@ tf.app.flags.DEFINE_integer('output_inverval_steps', 1, 'number of inverval step
 
 tf.app.flags.DEFINE_boolean('early_stop', True, 'whether to early stop during training')
 tf.app.flags.DEFINE_float('train_ratio', 0.8, 'ratio of training data in the whole dataset')
+
+tf.app.flags.DEFINE_boolean('save_model', True, 'whether to save model after evaluation')
+tf.app.flags.DEFINE_string('ckpt_path', './ckpt/mat-FFM.ckpt', 'file path of checkpoint (saved model)')
 
 class FFM:
     def __init__(self, train_set, valid_set, test_set):
@@ -178,6 +180,9 @@ class FFM:
         test_loss, test_summary = self.sess.run([self.loss, self.merged], feed_dict = feed_dict)
         tf.logging.info("test loss:{} ({})".format(test_loss, datetime.now()))
 
+    def save_model(self):
+        self.saver.save(self.sess, FLAGS.ckpt_path)
+
 
 def main(unused_args):
 
@@ -200,6 +205,7 @@ def main(unused_args):
         FLAGS.epoch_num = stopping_epoch_num
         ffm.train()
     ffm.test()
+    ffm.save_model()
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)

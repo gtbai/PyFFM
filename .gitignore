@@ -1,6 +1,11 @@
 tf_src/train_plot/
 tf_src/valid_plot/
 tf_src/test_plot/
+
+tf_src/train_plot-auth/
+tf_src/valid_plot-auth/
+tf_src/test_plot-auth/
+
 converters/
 utils/
 run.py

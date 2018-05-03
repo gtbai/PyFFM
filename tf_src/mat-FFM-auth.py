@@ -18,11 +18,16 @@ tf.app.flags.DEFINE_integer('batch_size', 1, 'batch size for mini-batch SGD')
 tf.app.flags.DEFINE_string('train_path', '../data/criteo.tr.r100.gbdt0.ffm', 'file path of training dataset')
 tf.app.flags.DEFINE_string('test_path', '../data/criteo.va.r100.gbdt0.ffm', 'file path of test dataset')
 
+
 tf.app.flags.DEFINE_integer('epoch_num', 30, 'number of training epochs')
 tf.app.flags.DEFINE_integer('output_inverval_steps', 100, 'number of inverval steps to output training loss')
 
 tf.app.flags.DEFINE_boolean('early_stop', True, 'whether to early stop during training')
 tf.app.flags.DEFINE_float('train_ratio', 0.85, 'ratio of training data in the whole dataset')
+
+tf.app.flags.DEFINE_boolean('save_model', True, 'whether to save model after evaluation')
+tf.app.flags.DEFINE_string('ckpt_path', './ckpt/mat-FFM-auth.ckpt', 'file path of checkpoint (saved model)')
+
 
 class FFM:
     def __init__(self, train_set, valid_set, test_set):
@@ -39,6 +44,7 @@ class FFM:
         if FLAGS.early_stop:
             self.field_num = max(self.field_num, valid_set.field_num)
             self.feature_num = max(self.feature_num, valid_set.feature_num)
+        self.saver = tf.train.saver()
 
         print("field num {} feature num {}".format(self.field_num, self.feature_num))
 
@@ -107,9 +113,9 @@ class FFM:
 
         with tf.name_scope('plot'):
             self.merged = tf.summary.merge_all()
-            self.train_writer = tf.summary.FileWriter('./train_plot', self.sess.graph)
-            self.valid_writer = tf.summary.FileWriter('./valid_plot', self.sess.graph)
-            self.test_writer = tf.summary.FileWriter('./test_plot', self.sess.graph)
+            self.train_writer = tf.summary.FileWriter('./train_plot-auth', self.sess.graph)
+            self.valid_writer = tf.summary.FileWriter('./valid_plot-auth', self.sess.graph)
+            self.test_writer = tf.summary.FileWriter('./test_plot-auth', self.sess.graph)
 
         self.sess.run(tf.global_variables_initializer())
         self.loop_step = 0
@@ -174,6 +180,9 @@ class FFM:
         test_loss, test_summary = self.sess.run([self.loss, self.merged], feed_dict = feed_dict)
         tf.logging.info("test loss:{} ({})".format(test_loss, datetime.now()))
 
+    def save_model(self):
+        self.saver.save(self.sess, FLAGS.ckpt_path)
+
 
 def main(unused_args):
 
@@ -196,6 +205,7 @@ def main(unused_args):
         FLAGS.epoch_num = stopping_epoch_num
         ffm.train()
     ffm.test()
+    ffm.save_model()
 
 if __name__ == "__main__":
     tf.logging.set_verbosity(tf.logging.INFO)
