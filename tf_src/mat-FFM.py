@@ -17,14 +17,14 @@ tf.app.flags.DEFINE_integer('batch_size', 128, 'batch size for mini-batch SGD')
 tf.app.flags.DEFINE_string('train_path', '../data/criteo.tr.r100.gbdt0.ffm', 'file path of training dataset')
 tf.app.flags.DEFINE_string('test_path', '../data/criteo.va.r100.gbdt0.ffm', 'file path of test dataset')
 
-tf.app.flags.DEFINE_integer('epoch_num', 30, 'number of training epochs')
+tf.app.flags.DEFINE_integer('epoch_num', 15, 'number of training epochs')
 tf.app.flags.DEFINE_integer('output_inverval_steps', 1, 'number of inverval steps to output training loss')
 
 tf.app.flags.DEFINE_boolean('early_stop', True, 'whether to early stop during training')
 tf.app.flags.DEFINE_float('train_ratio', 0.8, 'ratio of training data in the whole dataset')
 
 tf.app.flags.DEFINE_boolean('save_model', True, 'whether to save model after evaluation')
-tf.app.flags.DEFINE_string('ckpt_path', './ckpt/mat-FFM.ckpt', 'file path of checkpoint (saved model)')
+tf.app.flags.DEFINE_string('ckpt_path', '/mnt/project/ckpt/mat-FFM.ckpt', 'file path of checkpoint (saved model)')
 
 class FFM:
     def __init__(self, train_set, valid_set, test_set):
@@ -107,16 +107,16 @@ class FFM:
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, name='Adam')
             # self.optimizer = tf.train.AdagradOptimizer(learning_rate=self.learning_rate, initial_accumulator_value=1)
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
-            self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+            self.train_op = self.optimizer.minimize(self.loss_with_regu, global_step=self.global_step)
 
 	self.saver = tf.train.Saver()
         self.sess = tf.InteractiveSession()
 
         with tf.name_scope('plot'):
             self.merged = tf.summary.merge_all()
-            self.train_writer = tf.summary.FileWriter('./train_plot', self.sess.graph)
-            self.valid_writer = tf.summary.FileWriter('./valid_plot', self.sess.graph)
-            self.test_writer = tf.summary.FileWriter('./test_plot', self.sess.graph)
+            self.train_writer = tf.summary.FileWriter('/mnt/project/train_plot', self.sess.graph)
+            self.valid_writer = tf.summary.FileWriter('/mnt/project/valid_plot', self.sess.graph)
+            self.test_writer = tf.summary.FileWriter('/mnt/project/test_plot', self.sess.graph)
 
         self.sess.run(tf.global_variables_initializer())
         self.loop_step = 0
@@ -201,11 +201,14 @@ def main(unused_args):
 
     stopping_epoch_num = ffm.train()
     if FLAGS.early_stop:
-        ffm.train_set = Dataset(FLAGS.train_path, 0.0, 1.0)
-        FLAGS.early_stop = False
-	FLAGS.epoch_num = stopping_epoch_num if stopping_epoch_num != None else FLAGS.epoch_num
-        ffm.sess.run(tf.global_variables_initializer())
-        ffm.train()
+	if stopping_epoch_num is not None:            
+            ffm.train_set = Dataset(FLAGS.train_path, 0.0, 1.0)
+            FLAGS.early_stop = False
+    	    FLAGS.epoch_num = stopping_epoch_num if stopping_epoch_num != None else FLAGS.epoch_num
+            ffm.sess.run(tf.global_variables_initializer())
+            ffm.train()
+	else:
+	    tf.logging.info("model with learning rate:{} and batch size:{} does not converge.".format(FLAGS.learning_rate, FLAGS.batch_size))
     ffm.test()
     ffm.save_model()
 
