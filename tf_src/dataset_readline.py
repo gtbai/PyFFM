@@ -43,13 +43,19 @@ class Dataset(object):
                 else:
                     len_samples = 6042135
 
+                start_index = int(start_ratio*len_samples)
+                end_index = int(end_ratio*len_samples)
 
-		data_file = open(data_path, 'r')
-		samples = data_file.readlines()
 		samples = samples[int(start_ratio*len(samples)) : int(end_ratio*len(samples))]
-		for sample in samples:
-
-			parts = sample.split(' ')
+		
+                with open(data_path, 'r') as f:
+                    for index, sample in enumerate(f):
+			if index < start_index:
+                            continue
+                        if index >= end_index:
+                            break
+                        
+                        parts = sample.split(' ')
 			y = int(parts[0])
 
 			x_field = []
